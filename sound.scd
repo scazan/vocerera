@@ -7,7 +7,7 @@ s.waitForBoot({
 	var numPlayers = 4;
 
 	// Paths
-	var mainPath = "~/MobileScores/Carmina/vocerera/sounds/";
+	var mainPath = "~/sounds/";
 	var folderCategories = ["BARULLOS", "CANCIONES", "NARRACIONES", "SONIDOSSCAPE"];
 
 	// Buffers
@@ -38,6 +38,10 @@ s.waitForBoot({
 		});
 
 		categoryBuffers[bufferIndex] = Buffer.read(s, categoryDir.files.choose.fullPath, action: {
+			// empty garbage
+			garbageBuffers.do(_.free);
+			garbageBuffers = List.new;
+
 			callback.value() ?? nil;
 		});
 	};
@@ -66,7 +70,7 @@ s.waitForBoot({
 			var buffer = categoryBuffers[i];
 			var player = PlayBuf.ar(buffer.numChannels, buffer, loop: 0, doneAction: 2);
 
-			player * ampBusses[i].kr;
+			Out.ar(i, (player[0]+player[1]) * ampBusses[i].kr);
 		}.play;
 
 		{
@@ -76,6 +80,32 @@ s.waitForBoot({
 		}.fork;
 	};
 
+
+	//ARDUINO
+	var serial = SerialPort("/dev/ttyUSB0", baudrate: 9600, crtscts: true);
+
+	var readSerial = Routine({
+		var byte, str, res;
+		{
+			if(serial.read==10, {
+				str = "";
+				while({byte = serial.read; byte !=13 }, {
+					str= str++byte.asAscii;
+				});
+				res= str.asInteger;
+				("read value:"+res).postln;
+				if(res > 1, {
+					personEnters.value();
+				}, {
+					personExits.value();
+				});
+			});
+			0.01.wait;
+		}.loop;
+	});
+
+
+	// PROGRAM
 	preloadFiles.value({
 		players = Array.fill(numPlayers, createPlayer);
 	});
@@ -97,14 +127,13 @@ s.waitForBoot({
 	});
 
 	Tdef(\playbackSeq).play;
+	readSerial.play;
 
 	// Making globals for testing
-	~enter = personEnters;
-	~exit = personExits;
+	//~enter = personEnters;
+	//~exit = personExits;
+	//~buffers = categoryBuffers;
 });
 
 )
 
-
-~enter.value();
-~exit.value();
