@@ -86,6 +86,7 @@ s.waitForBoot({
 
 	var readSerial = Routine({
 		var byte, str, res;
+		var threshold = 80;
 		{
 			if(serial.read==10, {
 				str = "";
@@ -94,7 +95,7 @@ s.waitForBoot({
 				});
 				res= str.asInteger;
 				("read value:"+res).postln;
-				if(res > 1, {
+				if(res > threshold, {
 					personEnters.value();
 				}, {
 					personExits.value();
