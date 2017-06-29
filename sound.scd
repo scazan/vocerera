@@ -3,11 +3,11 @@
 s.waitForBoot({
 	// Settings
 	var masterVol = 0;
-	var lowVol=0.05, highVol=0.3;
+	var lowVol=0.1, highVol=0.3;
 	var numPlayers = 4;
 
 	// Paths
-	var mainPath = "~/sounds/";
+	var mainPath = "/home/pi/vocerera/sounds/";
 	var folderCategories = ["BARULLOS", "CANCIONES", "NARRACIONES", "SONIDOSSCAPE"];
 
 	// Buffers
@@ -32,17 +32,19 @@ s.waitForBoot({
 		//var categoryIndex = categoryBuffers.indexOf(buffer);
 		var categoryDir = PathName.new(mainPath ++ folderCategories[bufferIndex]);
 
+
 		// Add previous buffer to garbage
-		if(categoryBuffers[bufferIndex].notNil, {
-			garbageBuffers.add(categoryBuffers[bufferIndex]);
-		});
+		//if(categoryBuffers[bufferIndex].notNil, {
+			//garbageBuffers.add(categoryBuffers[bufferIndex]);
+		//});
 
 		categoryBuffers[bufferIndex] = Buffer.read(s, categoryDir.files.choose.fullPath, action: {
-			// empty garbage
-			garbageBuffers.do(_.free);
-			garbageBuffers = List.new;
+		// empty garbage
+		//garbageBuffers.postln;
+		//garbageBuffers.do(_.free);
+		//garbageBuffers = List.new;
 
-			callback.value() ?? nil;
+			callback.value(bufferIndex) ?? nil;
 		});
 	};
 
@@ -64,19 +66,27 @@ s.waitForBoot({
 
 
 
-	var createPlayer = { |i|
-		var bufferLengthSecs = categoryBuffers[i].numFrames / categoryBuffers[i].sampleRate;
+	var createPlayer = { | index |
+		var bufferLengthSecs = categoryBuffers[index].numFrames / categoryBuffers[index].sampleRate;
+		var ampScales = [0.9,0.9,1,6];
+
+		var buffer = categoryBuffers[index];
+
 		{
-			var buffer = categoryBuffers[i];
 			var player = PlayBuf.ar(buffer.numChannels, buffer, loop: 0, doneAction: 2);
 
-			Out.ar(i, (player[0]+player[1]) * ampBusses[i].kr);
+			player = CompanderD.ar(player, thresh: 0.5, slopeBelow: 0.7, slopeAbove: 0.9 );
+
+			Out.ar(index, (player[0]+player[1]) * ampBusses[index].kr * ampScales[index]);
 		}.play;
 
 		{
 			bufferLengthSecs.wait;
-			createPlayer.value(i);
-			preloadFile.value(i);
+			0.5.wait;
+			//createPlayer.value(index);
+			//0.5.wait;
+			categoryBuffers[index].free;
+			preloadFile.value(index, createPlayer);
 		}.fork;
 	};
 
@@ -86,7 +96,8 @@ s.waitForBoot({
 
 	var readSerial = Routine({
 		var byte, str, res;
-		var threshold = 80;
+		var threshold = 10;
+		"Serial ready".postln;
 		{
 			if(serial.read==10, {
 				str = "";
@@ -94,7 +105,7 @@ s.waitForBoot({
 					str= str++byte.asAscii;
 				});
 				res= str.asInteger;
-				("read value:"+res).postln;
+				//("read value:"+res).postln;
 				if(res > threshold, {
 					personEnters.value();
 				}, {
@@ -119,7 +130,7 @@ s.waitForBoot({
 			
 			var randomBusFocus = ampBusses.choose;
 			{
-				var env = EnvGen.kr(Env.new([lowVol, highVol, lowVol],[5, 30, 5]), doneAction:2) * masterVol;
+				var env = EnvGen.kr(Env.new([lowVol, highVol, lowVol],[5, 5, 1]), doneAction:2) * masterVol;
 				Out.kr(randomBusFocus, env);
 			}.play;
 
@@ -130,11 +141,10 @@ s.waitForBoot({
 	Tdef(\playbackSeq).play;
 	readSerial.play;
 
-	// Making globals for testing
+	 //Making globals for testing
 	//~enter = personEnters;
 	//~exit = personExits;
-	//~buffers = categoryBuffers;
+	~buffers = categoryBuffers;
 });
 
 )
-
